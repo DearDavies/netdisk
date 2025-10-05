@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.31)
-project(multithreadServer C)
+project(netdisk C)
 
 set(CMAKE_C_STANDARD 11)
 
