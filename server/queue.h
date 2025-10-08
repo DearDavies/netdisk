@@ -32,11 +32,4 @@ void enqueue(queue_t* queue, int fd);
 // 从队列中出队，返回 fd。
 int dequeue(queue_t* queue);
 
-/*
- * 功能：子线程要做的工作。
- * 参数：客户端的连接。
- * 返回值：成功返回 0，失败返回非零值。
- */
-int do_work(int client_fd);
-
 #endif //QUEUE_H

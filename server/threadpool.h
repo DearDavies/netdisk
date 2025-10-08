@@ -1,8 +1,6 @@
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
-#include <pthread.h>
-#include "head.h"
 #include "queue.h"
 
 typedef struct {

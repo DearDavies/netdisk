@@ -13,6 +13,6 @@ void read_user_order(char** user_order, user_t user_status);
 void parse_user_order(const char* user_order, order_t* instruction, user_t* user_status);
 
 // 根据不同的命令，执行不同流程
-void dispath(order_t instruction, user_t* user_status, int sock_fd);
+void dispath_order(order_t instruction, user_t* user_status, int sock_fd);
 
 #endif //NETDISK_SUBROUTINE_H

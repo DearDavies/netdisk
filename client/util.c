@@ -5,6 +5,7 @@
 #include "util.h"
 #include "logger.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>  // 包含 read() 和 STDIN_FILENO
 #include <termios.h> // 包含终端属性控制函数
 
@@ -45,3 +46,26 @@ void get_password(char* password, int max_len) {
     tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
 }
 
+void change_user_t_username(user_t* user, const char* username) {
+    char* temp_username = user->username;
+    user->username = (char*)username;
+    if (temp_username != NULL) {
+        free(temp_username);
+    }
+}
+
+void change_user_t_pwd(user_t* user, const char* pwd) {
+    char* temp_pwd = user->my_pwd;
+    user->my_pwd = (char*)pwd;
+    if (temp_pwd != NULL) {
+        free(temp_pwd);
+    }
+}
+
+void change_order_t_paras(order_t* order, const char* paras) {
+    char* temp_paras = order->paras;
+    order->paras = (char*)paras;
+    if (temp_paras != NULL) {
+        free(temp_paras);
+    }
+}

@@ -10,6 +10,7 @@
 
 typedef enum {
     INVALID,
+    EMPTY,
     CD,
     MKDIR,
     PUT,
@@ -25,14 +26,15 @@ typedef struct {
 } order_t;
 
 typedef struct {
-    // 是否登录
-    int is_login;
-    // 用户是否选择了退出程序
-    int exit_flag;
-    // 用户名
-    char* username;
-    // 当前工作目录
-    char* my_pwd;
+    int is_login; // 是否登录
+    int exit_flag; // 用户是否选择了退出程序
+    char* username; // 用户名
+    char* my_pwd; // 当前工作目录
 } user_t;
+
+typedef struct {
+    int order_type;
+    char paras[4097];
+} send_message_t;
 
 #endif //NETDISK_CLIENT_H

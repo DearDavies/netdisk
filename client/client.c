@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
         // 如果没有登录
         if (check_login(user_status) == SIGNOUT) {
             int choice = 0;
-            printf("1. 注册；2. 登录；3. 退出\n");
+            printf("1. 注册；2. 登录；3. 退出\n输入要执行的功能编号：");
             scanf("%d", &choice);
             try_login(choice, &user_status);
             if (user_status.exit_flag == EXIT_FLAG_YES) {
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
             parse_user_order(user_order, &instruction, &user_status);
 
             // 根据不同的命令，执行不同流程
-            dispath(instruction, &user_status, sockfd);
+            dispath_order(instruction, &user_status, sockfd);
         }
     }
     return 0;

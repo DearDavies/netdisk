@@ -1,4 +1,14 @@
 #include "head.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
+#include <sys/stat.h>
 
 // 初始化 socket_fd，失败返回非零值
 int init_socket(int* socket_fd, char* ip, char* port) {
