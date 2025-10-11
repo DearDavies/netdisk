@@ -27,7 +27,7 @@ void caught_sigint(int sig) {
 
 int main() {
     // 初始化日志
-    if (log_init("config.ini") != 0) {
+    if (log_init("server_config.ini") != 0) {
         fprintf(stderr, "Logger 初始化失败\n");
         return 1;
     }
