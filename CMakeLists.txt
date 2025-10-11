@@ -3,14 +3,16 @@ project(netdisk C)
 
 set(CMAKE_C_STANDARD 11)
 
-# 自动查找 client 文件夹下所有的 .cpp 文件
+# 自动查找 client 文件夹下所有的 .c 文件
 file(GLOB CLIENT_SOURCES "client/*.c")
+file(GLOB CLIENT_MODULES "client/modules/*.c")
+
 # 自动查找 server 文件夹下所有的 .c 文件
 file(GLOB SERVER_SOURCES "server/*.c")
 file(GLOB SERVER_MODULES "server/modules/*.c")
 
 # 使用这些源文件创建可执行文件
-add_executable(client_app ${CLIENT_SOURCES})
+add_executable(client_app ${CLIENT_SOURCES} ${CLIENT_MODULES})
 add_executable(server_app ${SERVER_SOURCES} ${SERVER_MODULES})
 
 # 1. 查找系统上的线程库
