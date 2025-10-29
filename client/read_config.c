@@ -145,7 +145,13 @@ const char* get_config_value(const Section* head, const char* section_name, cons
             const KeyValue* current_pair = current_section->pairs;
             while (current_pair != NULL) {
                 if (strcmp(current_pair->key, key_name) == 0) {
-                    return current_pair->value;
+                    // 找到了Key，获取对应的Value
+                    const char* value = current_pair->value;
+                    // 要复制一份出去，否则会丢失
+                    size_t len = strlen(value);
+                    char * result = calloc(len + 1, sizeof(char));
+                    strcpy(result, value);
+                    return result;
                 }
                 current_pair = current_pair->next;
             }

@@ -26,6 +26,7 @@ void destroy_threadpool(threadpool_t* threadpool) {
 }
 
 void* thread_main(void* arg) {
+    const char* config_file_name = "server_config.ini";
     queue_t* queue = (queue_t*)arg;
     pthread_t tid = pthread_self();
     LOG_INFO("子线程（%ld）已启动", tid);
@@ -42,8 +43,9 @@ void* thread_main(void* arg) {
             pthread_exit(NULL);
         }
         LOG_INFO("子线程（%ld）正在工作，获取到了连接%d", tid, new_client_fd);
-        Section* config = parse_ini_file("config.ini");
+        Section* config = parse_ini_file(config_file_name);
         const char* base_path = get_config_value(config, "server", "base_path");
+        LOG_DEBUG("服务端成功获取到base_path = %s", base_path);
         int ret = do_work(new_client_fd, base_path);
         if (ret != 0) {
             if (ret == -1) {

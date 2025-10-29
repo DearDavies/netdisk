@@ -4,7 +4,8 @@
 #include "client.h"
 
 // 执行登录、注册、退出的流程。
-void try_login(int choice, user_t* user_status);
+// sock_fd: 与服务端的连接套接字
+void try_login(int choice, user_t* user_status, int sock_fd);
 
 // 接收用户输入的命令
 void read_user_order(char** user_order, user_t user_status);

@@ -25,7 +25,8 @@
 
 int main(int argc, char* argv[]) {
     // 初始化日志
-    if (log_init("client_config.ini") != 0) {
+    const char* config_file_name = "client_config.ini";
+    if (log_init(config_file_name) != 0) {
         fprintf(stderr, "Logger 初始化失败\n");
         return 1;
     }
@@ -34,11 +35,11 @@ int main(int argc, char* argv[]) {
 
     user_t user_status = {0};
     char buffer[BUFFERMAX] = {0};
-    Section* config = parse_ini_file("config.ini");
+    Section* config = parse_ini_file(config_file_name);
     const char* serverip = get_config_value(config, "server", "ip_address");
-    LOG_DEBUG("从config.ini获取到服务器ip为 %s ", serverip);
+    LOG_DEBUG("从%s获取到服务器ip为%s", config_file_name, serverip);
     const char* port = get_config_value(config, "server", "port");
-    LOG_DEBUG("从config.ini获取到服务器port为 %s ", port);
+    LOG_DEBUG("从%s获取到服务器port为%s", config_file_name, port);
     free_config(config);
 
     // 与服务器建立连接
@@ -65,7 +66,11 @@ int main(int argc, char* argv[]) {
             int choice = 0;
             printf("1. 注册；2. 登录；3. 退出\n输入要执行的功能编号：");
             scanf("%d", &choice);
-            try_login(choice, &user_status);
+            // 清空输入缓冲区
+            scanf("%*[^\n]");
+            scanf("%*c");
+
+            try_login(choice, &user_status, sockfd);
             if (user_status.exit_flag == EXIT_FLAG_YES) {
                 close(sockfd);
                 break;
