@@ -17,9 +17,9 @@
 #define EXIT_FLAG_YES 1
 
 // 主菜单的功能选项
-#define REGISTER 1
-#define LOGIN 2
-#define EXIT 3
+#define MENU_REGISTER 1
+#define MENU_LOGIN 2
+#define MENU_EXIT 3
 
 // // 日志等级
 // #define ERROR 1

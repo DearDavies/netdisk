@@ -23,3 +23,16 @@ find_package(Threads REQUIRED)
 #    Threads::Threads 是一个 CMake 目标，它包含了所有需要的信息
 #    （比如头文件路径、库文件路径、需要链接的库名 -lpthread 等）
 target_link_libraries(server_app PRIVATE Threads::Threads)
+
+# 3. 查找 MySQL 和 OpenSSL 库
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MYSQL REQUIRED mysqlclient)
+pkg_check_modules(OPENSSL REQUIRED openssl)
+
+# 4. 链接 MySQL 和 OpenSSL 库到服务端
+target_include_directories(server_app PRIVATE ${MYSQL_INCLUDE_DIRS})
+target_link_libraries(server_app PRIVATE ${MYSQL_LIBRARIES})
+
+# 5. 链接 OpenSSL 到客户端（用于 SHA512）
+target_link_libraries(client_app PRIVATE ${OPENSSL_LIBRARIES})
+target_include_directories(client_app PRIVATE ${OPENSSL_INCLUDE_DIRS})

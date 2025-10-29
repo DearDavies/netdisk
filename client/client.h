@@ -11,6 +11,8 @@
 typedef enum {
     INVALID,
     EMPTY,
+    REGISTER,  // 注册
+    LOGIN,     // 登录
     CD,
     MKDIR,
     PUT,

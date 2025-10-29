@@ -27,7 +27,8 @@ void caught_sigint(int sig) {
 
 int main() {
     // 初始化日志
-    if (log_init("server_config.ini") != 0) {
+    const char* config_file_name = "server_config.ini";
+    if (log_init(config_file_name) != 0) {
         fprintf(stderr, "Logger 初始化失败\n");
         return 1;
     }
@@ -55,11 +56,11 @@ int main() {
     }
     LOG_INFO("子进程（pid = %d）进入后台进程组（pgid = %d）", getpid(), getpgid(getpid()));
 
-    Section* config = parse_ini_file("config.ini");
+    Section* config = parse_ini_file(config_file_name);
     const char* server_ip = get_config_value(config, "server", "ip_address");
-    LOG_DEBUG("从config.ini获取到服务器ip为 %s ", server_ip);
+    LOG_DEBUG("从%s获取到服务器ip为 %s ", config_file_name, server_ip);
     const char* server_port = get_config_value(config, "server", "port");
-    LOG_DEBUG("从config.ini获取到服务器port为 %s ", server_port);
+    LOG_DEBUG("从%s获取到服务器port为 %s ", config_file_name, server_port);
     free_config(config);
 
     queue_t queue = {0};

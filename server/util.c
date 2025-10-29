@@ -21,7 +21,7 @@ int init_socket(int* socket_fd, char* ip, char* port) {
         perror("init_socket：socket");
         return -1;
     }
-    // 设置端口重用
+    // 设置端口重用（地址与端口）。需在 bind 之前设置。
     int reuseaddr = 1;
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(int));
     // 绑定
