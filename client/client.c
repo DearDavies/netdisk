@@ -64,6 +64,7 @@ int main(int argc, char* argv[]) {
         // 如果没有登录
         if (check_login(user_status) == SIGNOUT) {
             int choice = 0;
+            printf("\n=========================\n");
             printf("1. 注册；2. 登录；3. 退出\n输入要执行的功能编号：");
             scanf("%d", &choice);
             // 清空输入缓冲区

@@ -36,4 +36,22 @@ void normalize_join_path(const char* base_path,
 /* 简单判断路径是否为目录（存在且为目录时返回非 0）。*/
 int is_dir(const char* p);
 
+/*
+ * 将绝对逻辑路径拆分为“父目录 + 当前名称”。
+ * 例如：/docs/a.txt -> parent_out=/docs, name_out=a.txt
+ */
+void split_parent_and_name(const char* logical_path,
+                           char* parent_out,
+                           size_t parent_sz,
+                           char* name_out,
+                           size_t name_sz);
+
+/*
+ * 仅基于逻辑路径规则（不依赖物理目录）拼接 pwd 与 add，返回规范化后的绝对逻辑路径。
+ */
+void build_logical_path(const char* pwd,
+                        const char* add,
+                        char* out,
+                        size_t out_sz);
+
 #endif // SERVER_MODULES_COMMON_H

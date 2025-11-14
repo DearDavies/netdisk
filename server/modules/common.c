@@ -12,7 +12,10 @@
  * 发送“长度前缀 + 文本”的响应。长度为 4 字节网络序，文本不含终止符。
  */
 void send_kv_response(int client_fd, const char* kv_text) {
-    // 计算文本长度，并转换为网络字节序
+    /*
+     * 这里必须显式使用 uint32_t（固定 4 字节）携带长度，保持协议在不同平台上一致。
+     * 若用 size_t（在 64 位环境常为 8 字节）将导致客户端读取长度时出现错位，从而卡住或解析失败。
+     */
     uint32_t len = (uint32_t)strlen(kv_text);
     uint32_t net_len = htonl(len);
     // 先发送长度前缀
@@ -129,4 +132,55 @@ int is_dir(const char* p) {
     struct stat st; if (stat(p, &st) != 0) return 0; return S_ISDIR(st.st_mode);
 }
 
+void split_parent_and_name(const char* logical_path,
+                           char* parent_out,
+                           size_t parent_sz,
+                           char* name_out,
+                           size_t name_sz) {
+    if (!logical_path || logical_path[0] == '\0') {
+        if (parent_out && parent_sz > 0) {
+            strncpy(parent_out, "/", parent_sz - 1);
+            parent_out[parent_sz - 1] = '\0';
+        }
+        if (name_out && name_sz > 0) {
+            name_out[0] = '\0';
+        }
+        return;
+    }
+    const char* last_slash = strrchr(logical_path, '/');
+    if (!last_slash) {
+        if (parent_out && parent_sz > 0) {
+            strncpy(parent_out, "/", parent_sz - 1);
+            parent_out[parent_sz - 1] = '\0';
+        }
+        if (name_out && name_sz > 0) {
+            strncpy(name_out, logical_path, name_sz - 1);
+            name_out[name_sz - 1] = '\0';
+        }
+        return;
+    }
+    if (parent_out && parent_sz > 0) {
+        if (last_slash == logical_path) {
+            strncpy(parent_out, "/", parent_sz - 1);
+            parent_out[parent_sz - 1] = '\0';
+        } else {
+            size_t parent_len = (size_t)(last_slash - logical_path);
+            if (parent_len >= parent_sz) parent_len = parent_sz - 1;
+            memcpy(parent_out, logical_path, parent_len);
+            parent_out[parent_len] = '\0';
+        }
+    }
+    if (name_out && name_sz > 0) {
+        strncpy(name_out, last_slash + 1, name_sz - 1);
+        name_out[name_sz - 1] = '\0';
+    }
+}
 
+void build_logical_path(const char* pwd,
+                        const char* add,
+                        char* out,
+                        size_t out_sz) {
+    char dummy[PATH_MAX] = {0};
+    const char* safe_pwd = (pwd && pwd[0]) ? pwd : "/";
+    normalize_join_path("", "", safe_pwd, add, dummy, sizeof(dummy), out, out_sz);
+}

@@ -1,45 +1,95 @@
 #include "ls.h"
 #include "common.h"
+#include "db.h"
+#include "../logger.h"
 
-#include <dirent.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /*
- * LS：拼接真实目录并遍历，过滤 '.' 和 '..'，以换行拼接返回。
+ * LS：基于数据库中的 files 元数据列出逻辑目录。
+ * 1. 通过 db_list_entries_by_path 查询指定用户 parent_path 下的所有条目；
+ * 2. 将目录排在文件之前，并按名称排序（SQL 内已完成）；
+ * 3. 仅返回逻辑名称；目录追加一个 '/' 以便前端识别。
  */
-void modules_ls_handle(int client_fd, const char* base_path, const char* username, const char* pwd) {
-    // 计算当前逻辑目录对应的真实路径
-    char abs_path[4096] = {0};
-    normalize_join_path(base_path, username, pwd, "", abs_path, sizeof(abs_path), NULL, 0);
+void modules_ls_handle(int client_fd,
+                       const char* base_path,
+                       const char* username,
+                       const char* pwd,
+                       db_handle_t* db) {
+    (void)base_path;  // 新存储模型下不再直接遍历物理目录，保留参数用于兼容
 
-    // 打开目录失败则返回错误说明
-    DIR* dir = opendir(abs_path);
-    if (!dir) {
-        char buf[256];
-        snprintf(buf, sizeof(buf), "result=%s", "open dir failed");
-        send_kv_response(client_fd, buf);
+    if (!db || !db->conn || !username) {
+        send_kv_response(client_fd, "result=fail&error=database not ready");
         return;
     }
 
-    // 逐条读取目录项，忽略 . 与 ..，以换行拼接
-    char out[8192] = {0};
-    size_t pos = 0;
-    struct dirent* ent;
-    while ((ent = readdir(dir)) != NULL) {
-        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
-        size_t l = strlen(ent->d_name);
-        if (pos + l + 1 >= sizeof(out)) break; // 防止缓冲区溢出
-        memcpy(out + pos, ent->d_name, l);
-        pos += l;
-        out[pos++] = '\n';
+    const char* parent_path = (pwd && pwd[0]) ? pwd : "/";
+    db_file_entry_t* entries = NULL;
+    size_t entry_count = 0;
+    if (db_list_entries_by_path(db, username, parent_path, &entries, &entry_count) != 0) {
+        LOG_ERROR("从数据库列出目录失败：username=%s, path=%s", username, parent_path);
+        send_kv_response(client_fd, "result=fail&error=list directory failed");
+        return;
     }
-    closedir(dir);
-    out[pos] = '\0';
 
-    // 封装为 result=... 返回
-    char kv[8500] = {0};
-    snprintf(kv, sizeof(kv), "result=%s", out);
-    send_kv_response(client_fd, kv);
+    // 预估返回缓冲区大小：每条名称最多 255 字符 + '/' + '\n'
+    size_t buf_cap = entry_count ? (entry_count * 270) : 1;
+    char* listing = (char*)calloc(buf_cap, sizeof(char));
+    if (!listing) {
+        db_free_entries(entries);
+        send_kv_response(client_fd, "result=fail&error=out of memory");
+        return;
+    }
+
+    size_t used = 0;
+    for (size_t i = 0; i < entry_count; i++) {
+        const char* name = entries[i].name;
+        size_t name_len = strlen(name);
+        size_t extra = entries[i].is_dir ? 2 : 1; // '/' + '\n' or '\n'
+        // 需要确保 listing 缓冲区足够，必要时扩容
+        while (used + name_len + extra >= buf_cap) {
+            size_t new_cap = buf_cap * 2;
+            char* tmp = (char*)realloc(listing, new_cap);
+            if (!tmp) {
+                free(listing);
+                db_free_entries(entries);
+                send_kv_response(client_fd, "result=fail&error=out of memory");
+                return;
+            }
+            listing = tmp;
+            memset(listing + buf_cap, 0, new_cap - buf_cap);
+            buf_cap = new_cap;
+        }
+        memcpy(listing + used, name, name_len);
+        used += name_len;
+        if (entries[i].is_dir) {
+            listing[used++] = '/';
+        }
+        listing[used++] = '\n';
+    }
+    if (used == 0) {
+        listing[0] = '\0';
+    } else if (used < buf_cap) {
+        listing[used] = '\0';
+    } else {
+        listing[buf_cap - 1] = '\0';
+    }
+
+    size_t kv_len = strlen("result=") + strlen(listing) + 1;
+    char* kv_buf = (char*)malloc(kv_len);
+    if (!kv_buf) {
+        free(listing);
+        db_free_entries(entries);
+        send_kv_response(client_fd, "result=fail&error=out of memory");
+        return;
+    }
+    snprintf(kv_buf, kv_len, "result=%s", listing);
+    send_kv_response(client_fd, kv_buf);
+
+    free(kv_buf);
+    free(listing);
+    db_free_entries(entries);
 }
-
 

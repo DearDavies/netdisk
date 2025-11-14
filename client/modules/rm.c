@@ -5,117 +5,151 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <ctype.h>
+#include <limits.h>
 
 #include "../logger.h"
 #include "../util.h"
 
 void modules_rm(order_t instruction, user_t* user_status, int sock_fd) {
-    char* final_result = NULL;
-    int order_type = instruction.order_type;
-    char* username = user_status->username;
-    char* pwd = user_status->my_pwd;
-    char* paras = instruction.paras;
-
-    send_message_t send_message = {0};
-    send_message.order_type = order_type;
-    // 计算所需总长度
-    // 格式: "username=" + username + "&pwd=" + pwd + "&paras=" + paras + "\0"
-    size_t len = strlen("username=") + strlen(username) +
-        strlen("&pwd=") + strlen(pwd) +
-        strlen("&paras=") + strlen(paras) + 1; // +1 是为最后的空字符 '\0'
-
-    // 动态分配内存
-    char* result_string = (char*)calloc(len, sizeof(char));
-    if (result_string == NULL) {
-        // 内存分配失败，需要处理错误
-        LOG_ERROR("发送参数时，分配内存错误");
+    if (!instruction.paras || instruction.paras[0] == '\0') {
+        printf("用法: rm <path>\n");
         return;
     }
 
-    // 使用 snprintf 安全地格式化拼接字符串
-    snprintf(result_string, len, "username=%s&pwd=%s&paras=%s", username, pwd, paras);
+    const char* username = user_status->username;
+    const char* pwd = user_status->my_pwd;
+    const char* target = instruction.paras;
+    char confirm_flag[4] = "no"; // confirm=yes 时才会强制删除非空目录
+    int finished = 0;
 
-    LOG_DEBUG("拼接后的字符串: %s\n", result_string);
-    strncpy(send_message.paras, result_string, strlen(result_string));
-    // 将需要的指令，整合后发送到服务端
-    if (send(sock_fd, &send_message, sizeof(send_message_t), MSG_NOSIGNAL) == -1) {
-        LOG_ERROR("发送到服务器失败");
-        return;
-    }
-    free(result_string);
+    while (!finished) {
+        send_message_t send_message = {0};
+        send_message.order_type = instruction.order_type;
 
-    // 开始接收服务端
-    size_t net_recv_len = 0;
-    if (recv(sock_fd, &net_recv_len, sizeof(net_recv_len), MSG_WAITALL) == 0) {
-        printf("服务端断开\n");
-        LOG_INFO("服务端断开");
-        return;
-    }
-    size_t recv_len = ntohl(net_recv_len);
-    result_string = (char*)calloc(recv_len + 1, sizeof(char));
-    if (result_string == NULL) {
-        // 内存分配失败，需要处理错误
-        LOG_ERROR("接收服务端返回结果时，分配内存错误");
-        exit(EXIT_FAILURE);
-    }
-    if (recv(sock_fd, result_string, recv_len, MSG_WAITALL) == 0) {
-        printf("服务端断开\n");
-        LOG_ERROR("服务端断开");
-        exit(EXIT_FAILURE);
-    }
-    const char* p = result_string; // 主遍历指针
-
-    // 主循环，直到字符串末尾
-    while (*p != '\0') {
-        // 寻找 Key
-        const char* key_start = p;
-        while (*p != '\0' && *p != '=' && *p != '&') {
-            p++;
+        // payload 中包含 confirm 标志，服务端通过 confirm=yes 判断用户是否已确认删除。
+        size_t len = strlen("username=") + strlen(username) +
+                     strlen("&pwd=") + strlen(pwd) +
+                     strlen("&paras=") + strlen(target) +
+                     strlen("&confirm=") + strlen(confirm_flag) + 1;
+        char* payload = (char*)calloc(len, sizeof(char));
+        if (!payload) {
+            LOG_ERROR("rm 命令：拼接参数内存分配失败");
+            return;
         }
-        const char* key_end = p; // key_end 指向 '=' 或 '\0'
-        size_t key_len = key_end - key_start;
+        snprintf(payload, len, "username=%s&pwd=%s&paras=%s&confirm=%s",
+                 username, pwd, target, confirm_flag);
+        strncpy(send_message.paras, payload, sizeof(send_message.paras) - 1);
 
-        // 如果 key 长度为0 (例如 "&&" 或开头是 "&")，则跳过
-        if (key_len == 0) {
-            if (*p == '&') {
-                p++; // 跳过 '&'
+        if (send(sock_fd, &send_message, sizeof(send_message_t), MSG_NOSIGNAL) == -1) {
+            LOG_ERROR("rm 命令发送失败");
+            free(payload);
+            return;
+        }
+        free(payload);
+
+        uint32_t net_recv_len = 0;
+        if (recv(sock_fd, &net_recv_len, sizeof(net_recv_len), MSG_WAITALL) == 0) {
+            printf("服务端断开\n");
+            LOG_INFO("服务端断开");
+            return;
+        }
+        uint32_t recv_len = ntohl(net_recv_len);
+        char* result_string = (char*)calloc(recv_len + 1, sizeof(char));
+        if (!result_string) {
+            LOG_ERROR("rm 命令：读取结果内存分配失败");
+            return;
+        }
+        if (recv(sock_fd, result_string, recv_len, MSG_WAITALL) == 0) {
+            printf("服务端断开\n");
+            LOG_ERROR("服务端断开");
+            free(result_string);
+            return;
+        }
+
+        char result_buf[64] = {0};
+        char message_buf[512] = {0};
+        char error_buf[512] = {0};
+        char path_buf[PATH_MAX] = {0};
+
+        const char* p = result_string;
+        while (*p != '\0') {
+            const char* key_start = p;
+            while (*p != '\0' && *p != '=' && *p != '&') p++;
+            size_t key_len = (size_t)(p - key_start);
+            if (key_len == 0) {
+                if (*p == '&') p++;
+                continue;
             }
-            continue;
-        }
-
-        // 寻找 Value
-        const char* value_start = NULL;
-        const char* value_end = NULL;
-        size_t value_len = 0;
-
-        if (*p == '=') {
-            p++; // 跳过 '='
-            value_start = p;
-            while (*p != '\0' && *p != '&') {
+            const char* value_start = NULL;
+            const char* value_end = NULL;
+            size_t value_len = 0;
+            if (*p == '=') {
                 p++;
+                value_start = p;
+                while (*p != '\0' && *p != '&') p++;
+                value_end = p;
+                value_len = (size_t)(value_end - value_start);
             }
-            value_end = p; // value_end 指向 '&' 或 '\0'
-            value_len = value_end - value_start;
-        }
+            if (*p == '&') p++;
 
-        // 判断 Key 并进行赋值
-        if (key_len == strlen("result") && strncmp(key_start, "result", key_len) == 0) {
-            if (value_len > 0) {
-                final_result = (char*)calloc(value_len + 1, sizeof(char));
-                strncpy(final_result, value_start, value_len);
-                LOG_INFO("rm命令的执行效果为：%s", final_result);
+            if (value_len == 0) continue;
+            if (key_len == strlen("result") && strncmp(key_start, "result", key_len) == 0) {
+                size_t copy_len = value_len < sizeof(result_buf) - 1 ? value_len : sizeof(result_buf) - 1;
+                memcpy(result_buf, value_start, copy_len);
+                result_buf[copy_len] = '\0';
+            } else if (key_len == strlen("message") && strncmp(key_start, "message", key_len) == 0) {
+                size_t copy_len = value_len < sizeof(message_buf) - 1 ? value_len : sizeof(message_buf) - 1;
+                memcpy(message_buf, value_start, copy_len);
+                message_buf[copy_len] = '\0';
+            } else if (key_len == strlen("error") && strncmp(key_start, "error", key_len) == 0) {
+                size_t copy_len = value_len < sizeof(error_buf) - 1 ? value_len : sizeof(error_buf) - 1;
+                memcpy(error_buf, value_start, copy_len);
+                error_buf[copy_len] = '\0';
+            } else if (key_len == strlen("path") && strncmp(key_start, "path", key_len) == 0) {
+                size_t copy_len = value_len < sizeof(path_buf) - 1 ? value_len : sizeof(path_buf) - 1;
+                memcpy(path_buf, value_start, copy_len);
+                path_buf[copy_len] = '\0';
             }
         }
+        free(result_string);
 
-        // 如果不是字符串末尾，前进到下一对
-        if (*p == '&') {
-            p++;
+        if (strcasecmp(result_buf, "need_confirm") == 0) {
+            if (strcasecmp(confirm_flag, "yes") == 0) {
+                printf("删除失败：目录仍被判定为非空\n");
+                break;
+            }
+            const char* prompt_path = path_buf[0] ? path_buf : target;
+            const char* prompt_msg = message_buf[0] ? message_buf : "目录非空，确认删除？";
+            printf("%s (%s) [y/N]: ", prompt_msg, prompt_path);
+            fflush(stdout);
+            char answer[8] = {0};
+            if (!fgets(answer, sizeof(answer), stdin)) {
+                printf("已取消删除。\n");
+                break;
+            }
+            if (answer[0] == '\n') {
+                printf("已取消删除。\n");
+                break;
+            }
+            if (tolower((unsigned char)answer[0]) == 'y') {
+                // 用户确认后设置 confirm=yes，下一轮循环会立即重发同一请求。
+                strcpy(confirm_flag, "yes");
+                continue; // 重新发送，附带 confirm=yes
+            }
+            printf("已取消删除。\n");
+            break;
+        } else if (strcasecmp(result_buf, "ok") == 0) {
+            printf("删除完成: %s\n", target);
+            break;
+        } else {
+            const char* detail = error_buf[0] ? error_buf :
+                                 (message_buf[0] ? message_buf : "删除文件（夹）失败");
+            printf("%s\n", detail);
+            break;
         }
     }
-    if (strcasecmp(final_result, "ok") != 0) {
-        printf("删除文件（夹）失败\n");
-    }
+
     printf("%s:%s$ ", user_status->username, user_status->my_pwd);
-    free(result_string);
-    free(final_result);
 }

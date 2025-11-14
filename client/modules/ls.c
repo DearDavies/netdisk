@@ -43,13 +43,13 @@ void modules_ls(order_t instruction, user_t* user_status, int sock_fd) {
     free(result_string);
 
     // 开始接收服务端
-    size_t net_recv_len = 0;
+    uint32_t net_recv_len = 0;
     if (recv(sock_fd, &net_recv_len, sizeof(net_recv_len), MSG_WAITALL) == 0) {
         printf("服务端断开\n");
         LOG_INFO("服务端断开");
         return;
     }
-    size_t recv_len = ntohl(net_recv_len);
+    uint32_t recv_len = ntohl(net_recv_len);
     result_string = (char*)calloc(recv_len + 1, sizeof(char));
     if (result_string == NULL) {
         // 内存分配失败，需要处理错误
@@ -110,8 +110,15 @@ void modules_ls(order_t instruction, user_t* user_status, int sock_fd) {
             p++;
         }
     }
+    // 如果服务端返回 result=（空字符串），上面的解析逻辑不会分配 final_result，
+    // 此时直接 printf(NULL) 会导致崩溃，因此需要兜底。
+    if (!final_result) {
+        printf("该目录为空\n");
+        free(result_string);
+        return;
+    }
+
     printf("%s\n", final_result);
-    printf("%s:%s$ ", user_status->username, user_status->my_pwd);
     free(result_string);
     free(final_result);
 }

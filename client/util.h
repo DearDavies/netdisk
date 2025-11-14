@@ -19,4 +19,7 @@ void change_order_t_paras(order_t* order, const char* paras);
 // 使用 SHA512 对密码进行哈希加密，输出为 128 字符的十六进制字符串
 int sha512_hash(const char* password, char* hash_hex, size_t hash_hex_size);
 
+// 对文件内容执行 SHA512，输出同样为 128 字符的十六进制字符串
+int sha512_file(const char* file_path, char* hash_hex, size_t hash_hex_size);
+
 #endif //NETDISK_UTIL_H
