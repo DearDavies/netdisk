@@ -22,7 +22,12 @@ int pipe_fd[2];
 
 void caught_sigint(int sig) {
     LOG_INFO("主进程已收到信号%d", sig);
-    write(pipe_fd[1], "SIGINT", 6);
+    write(pipe_fd[1], "SIGINT", 10);
+}
+
+void caught_sigterm(int sig) {
+    LOG_INFO("主进程已收到信号%d", sig);
+    write(pipe_fd[1], "SIGTERM", 10);
 }
 
 int main() {
@@ -43,6 +48,7 @@ int main() {
     // 父进程，只负责监听什么时候来信号，并写管道即可
     if (pid > 0) {
         signal(SIGINT, caught_sigint);
+        signal(SIGTERM, caught_sigterm);
         wait(NULL);
         // printf("子进程已结束\n");
         exit(0);
@@ -125,8 +131,8 @@ int main() {
                 // 如果 pipe_fd[0]来消息
                 // 说明父进程收到了中断请求，子进程需要通知所有子线程终止
                 else if (event_fd == pipe_fd[0]) {
-                    char message[7] = {0};
-                    read(pipe_fd[0], message, 7);
+                    char message[10] = {0};
+                    read(pipe_fd[0], message, 10);
 
                     LOG_INFO("正在向队列中添加%d个终止消息符", CLIENTS);
                     for (int j = 0; j < CLIENTS; j++) {

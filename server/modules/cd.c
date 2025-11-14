@@ -1,31 +1,49 @@
 #include "cd.h"
 #include "common.h"
 
-#include <sys/stat.h>
+#include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 /*
- * CD：规范化出新 pwd，并验证目标是否存在且为目录。
+ * CD：仅操作逻辑目录，依据数据库记录判断目标路径是否存在。
+ * 1. 组合出目标逻辑路径；
+ * 2. 若为根目录则直接允许；
+ * 3. 否则查询 files 表确认目录存在；
+ * 4. 成功返回新的 pwd，失败返回原 pwd 与错误原因。
  */
-void modules_cd_handle(int client_fd, const char* base_path, const char* username, const char* pwd, const char* arg) {
-    // 计算规范化后的逻辑路径 new_pwd 与对应真实路径 abs_path
-    char abs_path[4096] = {0};
-    char new_pwd[4096] = {0};
-    normalize_join_path(base_path, username, pwd, arg, abs_path, sizeof(abs_path), new_pwd, sizeof(new_pwd));
+void modules_cd_handle(int client_fd,
+                       const char* base_path,
+                       const char* username,
+                       const char* pwd,
+                       const char* arg,
+                       db_handle_t* db) {
+    (void)base_path; // 逻辑目录完全靠数据库，保留参数以兼容旧接口
 
-    // 校验目标是否存在且为目录
-    struct stat st;
-    if (stat(abs_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-        // 成功：回传新的逻辑 pwd 与 ok
-        char kv[1024] = {0};
-        snprintf(kv, sizeof(kv), "pwd=%s&result=ok", new_pwd);
-        send_kv_response(client_fd, kv);
-    } else {
-        // 失败：维持原 pwd，并说明原因
-        char kv[256] = {0};
-        snprintf(kv, sizeof(kv), "pwd=%s&result=%s", pwd ? pwd : "/", "no such directory");
-        send_kv_response(client_fd, kv);
+    if (!db || !db->conn || !username) {
+        send_kv_response(client_fd, "pwd=/&result=fail&error=database not ready");
+        return;
     }
+
+    // 计算目标逻辑路径
+    char target_pwd[PATH_MAX] = {0};
+    build_logical_path(pwd, arg, target_pwd, sizeof(target_pwd));
+
+    int dir_state = db_directory_exists(db, username, target_pwd);
+    if (dir_state == -1) {
+        char kv[256] = {0};
+        snprintf(kv, sizeof(kv), "pwd=%s&result=fail&error=dir lookup failed", pwd ? pwd : "/");
+        send_kv_response(client_fd, kv);
+        return;
+    }
+    if (dir_state == 1) {
+        char kv[256] = {0};
+        snprintf(kv, sizeof(kv), "pwd=%s&result=no such directory", pwd ? pwd : "/");
+        send_kv_response(client_fd, kv);
+        return;
+    }
+
+    char kv[512] = {0};
+    snprintf(kv, sizeof(kv), "pwd=%s&result=ok", target_pwd);
+    send_kv_response(client_fd, kv);
 }
-
-

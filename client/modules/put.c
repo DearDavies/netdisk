@@ -3,11 +3,13 @@
 #include <stddef.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdint.h>
 
 #include "../logger.h"
 #include "../util.h"
@@ -83,11 +85,13 @@ void modules_put(order_t instruction, user_t* user_status, int sock_fd) {
     // 解析 local_path 与 optional remote_path
     char* temp = strdup(instruction.paras);
     char* saveptr = NULL;
+    // 使用 strtok_r 来解析字符串
     char* token = strtok_r(temp, " ", &saveptr);
     char* local_path = token;
     char* remote_path = strtok_r(NULL, " ", &saveptr); // 可能为 NULL
 
     // 若未提供 remote_path，用本地文件名作为远端文件名
+    // strrchr 用来在 C 字符串里从右往左查找某个字符最后一次出现的位置
     char* filename = strrchr(local_path, '/');
     filename = filename ? filename + 1 : local_path;
     if (!remote_path) remote_path = filename;
@@ -100,14 +104,27 @@ void modules_put(order_t instruction, user_t* user_status, int sock_fd) {
         return;
     }
 
+    // 计算文件内容的 SHA512 哈希，用于服务端秒传比对。
+    char file_hash[129] = {0};
+    if (sha512_file(local_path, file_hash, sizeof(file_hash)) != 0) {
+        printf("计算文件哈希失败: %s\n", local_path);
+        free(temp);
+        return;
+    }
+
     // 组织头部 send_message_t：放入 username, pwd, paras(=remote_path), filename, size
     send_message_t send_message = {0};
     send_message.order_type = PUT;
 
     // 构造 kv 字符串
     char kv[4096];
-    snprintf(kv, sizeof(kv), "username=%s&pwd=%s&paras=%s&filename=%s&size=%ld",
-             user_status->username, user_status->my_pwd, remote_path, filename, (long)st.st_size);
+    snprintf(kv, sizeof(kv), "username=%s&pwd=%s&paras=%s&filename=%s&size=%lld&hash=%s",
+             user_status->username,
+             user_status->my_pwd,
+             remote_path,
+             filename,
+             (long long)st.st_size,
+             file_hash);
     strncpy(send_message.paras, kv, sizeof(send_message.paras) - 1);
 
     // 发送头部
@@ -126,6 +143,20 @@ void modules_put(order_t instruction, user_t* user_status, int sock_fd) {
     char result[64] = {0};
     parse_kv_local(resp, "result", result, sizeof(result));
     if (strcasecmp(result, "ok") != 0) {
+        if (strcasecmp(result, "fast") == 0) {
+            char committed_path[4096] = {0};
+            char committed_size[64] = {0};
+            parse_kv_local(resp, "path", committed_path, sizeof(committed_path));
+            parse_kv_local(resp, "size", committed_size, sizeof(committed_size));
+            if (committed_size[0] == '\0') {
+                snprintf(committed_size, sizeof(committed_size), "%lld", (long long)st.st_size);
+            }
+            const char* final_remote = (committed_path[0] != '\0') ? committed_path : remote_path;
+            printf("秒传成功: %s -> %s (%s bytes)\n", local_path, final_remote, committed_size);
+            free(resp);
+            free(temp);
+            return;
+        }
         printf("服务端拒绝: %s\n", resp);
         free(resp);
         free(temp);
@@ -139,8 +170,10 @@ void modules_put(order_t instruction, user_t* user_status, int sock_fd) {
         free(temp);
         return;
     }
+    // 发送缓存大小是 8KB
     char buffer[8192];
     while (1) {
+        // 读取 8KB 到缓存里
         ssize_t r = read(fd, buffer, sizeof(buffer));
         if (r < 0) {
             close(fd);
@@ -148,6 +181,7 @@ void modules_put(order_t instruction, user_t* user_status, int sock_fd) {
             return;
         }
         if (r == 0) break;
+        // 发送
         if (send_frame(sock_fd, buffer, (size_t)r) != 0) {
             close(fd);
             free(temp);
@@ -167,9 +201,16 @@ void modules_put(order_t instruction, user_t* user_status, int sock_fd) {
     memset(result, 0, sizeof(result));
     parse_kv_local(resp, "result", result, sizeof(result));
     if (strcasecmp(result, "ok") == 0) {
-        printf("上传完成: %s -> %s\n", local_path, remote_path);
-    }
-    else {
+        char committed_path[4096] = {0};
+        char committed_size[64] = {0};
+        parse_kv_local(resp, "path", committed_path, sizeof(committed_path));
+        parse_kv_local(resp, "size", committed_size, sizeof(committed_size));
+        if (committed_size[0] == '\0') {
+            snprintf(committed_size, sizeof(committed_size), "%lld", (long long)st.st_size);
+        }
+        const char* final_remote = (committed_path[0] != '\0') ? committed_path : remote_path;
+        printf("上传完成: %s -> %s (%s bytes)\n", local_path, final_remote, committed_size);
+    } else {
         printf("上传失败: %s\n", resp);
     }
     free(resp);

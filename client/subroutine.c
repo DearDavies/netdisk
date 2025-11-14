@@ -69,6 +69,7 @@ static int parse_kv_local(const char* kv, const char* key, char* out, size_t out
 // 执行登录、注册、退出的流程。
 void try_login(int choice, user_t* user_status, int sock_fd) {
     if (choice == MENU_REGISTER) {
+        printf("\n=========================\n");
         // 执行注册流程，打印提示
         char reg_username[100] = {0};
         char reg_password[128] = {0};
@@ -83,9 +84,11 @@ void try_login(int choice, user_t* user_status, int sock_fd) {
             printf("请输入密码（不会回显）：");
             fflush(stdout);
             get_password(reg_password, sizeof(reg_password));
+            printf("\n");
             printf("请再输入密码（不会回显）：");
             fflush(stdout);
             get_password(reg_repeat_password, sizeof(reg_repeat_password));
+            printf("\n");
             if (strcmp(reg_password, reg_repeat_password) == 0) {
                 break;
             }
@@ -149,7 +152,7 @@ void try_login(int choice, user_t* user_status, int sock_fd) {
         }
     }
     if (choice == MENU_LOGIN) {
-        printf("\n==================\n正在登录\n");
+        printf("\n=========================\n正在登录\n");
         char login_username[100] = {0};
         char login_password[128] = {0};
         // 接收输入的用户名、密码
@@ -160,6 +163,7 @@ void try_login(int choice, user_t* user_status, int sock_fd) {
         printf("请输入密码（不会回显）：");
         fflush(stdout);
         get_password(login_password, sizeof(login_password));
+        printf("\n");
         // 使用 SHA512 加密密码
         char password_hash[129] = {0};
         if (sha512_hash(login_password, password_hash, sizeof(password_hash)) != 0) {

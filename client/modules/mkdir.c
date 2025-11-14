@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "../logger.h"
 #include "../util.h"
@@ -45,7 +46,8 @@ void modules_mkdir(order_t instruction, user_t* user_status, int sock_fd) {
     free(result_string);
 
     // 开始接收服务端
-    size_t net_recv_len = 0;
+    // 与服务端一样使用固定 4 字节的 uint32_t 接收长度，避免 size_t 在不同平台字节数不一致导致协议错位。
+    uint32_t net_recv_len = 0;
     if (recv(sock_fd, &net_recv_len, sizeof(net_recv_len), MSG_WAITALL) == 0) {
         printf("服务端断开\n");
         LOG_INFO("服务端断开");
@@ -115,7 +117,6 @@ void modules_mkdir(order_t instruction, user_t* user_status, int sock_fd) {
     if (strcasecmp(final_result, "ok") != 0) {
         printf("新建文件夹失败\n");
     }
-    printf("%s:%s$ ", user_status->username, user_status->my_pwd);
     free(result_string);
     free(final_result);
 }

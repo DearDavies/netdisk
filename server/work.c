@@ -57,10 +57,16 @@ int do_work(int client_fd, const char* base_path) {
         // PUT/GET 还会使用额外键：filename/size
         char filename[256] = {0};
         char size_str[64] = {0};
+        char file_hash[129] = {0};
+        char confirm_flag[16] = {0};
         parse_kv(recv_send_message.paras, "filename", filename, sizeof(filename));
         LOG_DEBUG("filename = %s", filename);
         parse_kv(recv_send_message.paras, "size", size_str, sizeof(size_str));
         LOG_DEBUG("size = %s", size_str);
+        parse_kv(recv_send_message.paras, "hash", file_hash, sizeof(file_hash));
+        LOG_DEBUG("hash = %s", file_hash);
+        parse_kv(recv_send_message.paras, "confirm", confirm_flag, sizeof(confirm_flag));
+        LOG_DEBUG("confirm = %s", confirm_flag);
         // 根据指令类型分发到具体模块
         switch (recv_send_message.order_type) {
             case REGISTER: {
@@ -100,24 +106,91 @@ int do_work(int client_fd, const char* base_path) {
                 }
                 break;
             }
-            case CD:
-                modules_cd_handle(client_fd, base_path, username, pwd, arg);
+            case CD: {
+                db_handle_t db = {0};
+                if (db_init(&db) == 0) {
+                    if (db_ensure_table(&db) == 0) {
+                        modules_cd_handle(client_fd, base_path, username, pwd, arg, &db);
+                    } else {
+                        send_kv_response(client_fd, "result=fail&error=init table failed");
+                    }
+                    db_close(&db);
+                } else {
+                    send_kv_response(client_fd, "result=fail&error=database connect failed");
+                }
                 break;
+            }
             case LS:
-                modules_ls_handle(client_fd, base_path, username, pwd);
+            {
+                db_handle_t db = {0};
+                if (db_init(&db) == 0) {
+                    if (db_ensure_table(&db) == 0) {
+                        modules_ls_handle(client_fd, base_path, username, pwd, &db);
+                    } else {
+                        send_kv_response(client_fd, "result=fail&error=init table failed");
+                    }
+                    db_close(&db);
+                } else {
+                    send_kv_response(client_fd, "result=fail&error=database connect failed");
+                }
                 break;
-            case MKDIR:
-                modules_mkdir_handle(client_fd, base_path, username, pwd, arg);
+            }
+            case MKDIR: {
+                db_handle_t db = {0};
+                if (db_init(&db) == 0) {
+                    if (db_ensure_table(&db) == 0) {
+                        modules_mkdir_handle(client_fd, base_path, username, pwd, arg, &db);
+                    } else {
+                        send_kv_response(client_fd, "result=fail&error=init table failed");
+                    }
+                    db_close(&db);
+                } else {
+                    send_kv_response(client_fd, "result=fail&error=database connect failed");
+                }
                 break;
-            case RM:
-                modules_rm_handle(client_fd, base_path, username, pwd, arg);
+            }
+            case RM: {
+                db_handle_t db = {0};
+                if (db_init(&db) == 0) {
+                    if (db_ensure_table(&db) == 0) {
+                        modules_rm_handle(client_fd, base_path, username, pwd, arg, confirm_flag, &db);
+                    } else {
+                        send_kv_response(client_fd, "result=fail&error=init table failed");
+                    }
+                    db_close(&db);
+                } else {
+                    send_kv_response(client_fd, "result=fail&error=database connect failed");
+                }
                 break;
-            case PUT:
-                modules_put_handle(client_fd, base_path, username, pwd, arg, filename, size_str);
+            }
+            case PUT: {
+                db_handle_t db = {0};
+                if (db_init(&db) == 0) {
+                    if (db_ensure_table(&db) == 0) {
+                        modules_put_handle(client_fd, base_path, username, pwd, arg, filename, size_str, file_hash, &db);
+                    } else {
+                        send_kv_response(client_fd, "result=fail&error=init table failed");
+                    }
+                    db_close(&db);
+                } else {
+                    send_kv_response(client_fd, "result=fail&error=database connect failed");
+                }
                 break;
-            case GET:
-                modules_get_handle(client_fd, base_path, username, pwd, arg);
+            }
+            case GET: {
+                db_handle_t db = {0};
+                if (db_init(&db) == 0) {
+                    if (db_ensure_table(&db) == 0) {
+                        modules_get_handle(client_fd, base_path, username, pwd, arg, &db);
+                    } else {
+                        send_kv_response(client_fd, "result=fail&error=init table failed");
+                    }
+                    db_close(&db);
+                } else {
+                    send_kv_response(client_fd, "result=fail&error=database connect failed");
+                }
                 break;
+            }
             default:
                 LOG_INFO("客户端发来一个无效命令");
         }

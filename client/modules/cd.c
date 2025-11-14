@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "../logger.h"
 #include "../util.h"
@@ -44,7 +45,9 @@ void modules_cd(order_t instruction, user_t* user_status, int sock_fd) {
     free(result_string);
 
     // 开始接收服务端
-    size_t net_recv_len = 0;
+    // 这里必须使用 uint32_t（固定 4 字节）接收长度，保持与服务端 send_kv_response 的协议一致；
+    // 若用 size_t（64 位平台通常为 8 字节）会多读数据，导致跨平台下解析出错。
+    uint32_t net_recv_len = 0;
     if (recv(sock_fd, &net_recv_len, sizeof(net_recv_len), MSG_WAITALL) == 0) {
         printf("服务端断开\n");
         LOG_INFO("服务端断开");
@@ -119,6 +122,5 @@ void modules_cd(order_t instruction, user_t* user_status, int sock_fd) {
             p++;
         }
     }
-    printf("%s:%s$ ", user_status->username, user_status->my_pwd);
     free(result_string);
 }

@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <openssl/sha.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 /*
  * 检查用户是否登录：返回 SIGNIN（已登录）或 SIGNOUT（未登录）。
@@ -98,5 +101,51 @@ int sha512_hash(const char* password, char* hash_hex, size_t hash_hex_size) {
     }
     hash_hex[128] = '\0';
     
+    return 0;
+}
+
+/*
+ * 对指定文件的全部内容计算 SHA512 哈希，结果同样输出为 128 个十六进制字符。
+ */
+int sha512_file(const char* file_path, char* hash_hex, size_t hash_hex_size) {
+    if (!file_path || !hash_hex || hash_hex_size < 129) {
+        return -1;
+    }
+
+    int fd = open(file_path, O_RDONLY);
+    if (fd < 0) {
+        return -1;
+    }
+
+    unsigned char hash[SHA512_DIGEST_LENGTH];
+    unsigned char buffer[32768];
+    SHA512_CTX ctx;
+    if (SHA512_Init(&ctx) != 1) {
+        close(fd);
+        return -1;
+    }
+
+    while (1) {
+        ssize_t n = read(fd, buffer, sizeof(buffer));
+        if (n < 0) {
+            close(fd);
+            return -1;
+        }
+        if (n == 0) break;
+        if (SHA512_Update(&ctx, buffer, (size_t)n) != 1) {
+            close(fd);
+            return -1;
+        }
+    }
+    close(fd);
+
+    if (SHA512_Final(hash, &ctx) != 1) {
+        return -1;
+    }
+
+    for (int i = 0; i < SHA512_DIGEST_LENGTH; i++) {
+        snprintf(hash_hex + i * 2, 3, "%02x", hash[i]);
+    }
+    hash_hex[128] = '\0';
     return 0;
 }
