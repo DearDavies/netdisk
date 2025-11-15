@@ -158,4 +158,4 @@ typedef enum {
 - 日志：`client/logger.*`, `server/logger.*`
 
 ## 许可证
-学习示例项目，未指定许可证。若需对外发布，请补充 LICENSE 并检查第三方依赖许可。
+学习示例项目，暂未指定许可证。
